@@ -48,7 +48,7 @@ public class MovieAssessmentSearchTest {
     As part of our homepage the latest added movie its suggested on a banner at the top of the page this test ensures
     a movie is shown.
      */
-    public void thisisatest3() {
+    public void verifyLatestMovieAdded() {
 
         SoftAssert softAssert = new SoftAssert();
         MoviesResponse moviesResponse = assertCallSucceeds(rest.movie.getLatestMovie()).body();
