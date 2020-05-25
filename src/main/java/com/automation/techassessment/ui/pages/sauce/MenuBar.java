@@ -11,8 +11,15 @@ public class MenuBar {
     private final Logger logger = LogManager.getLogger(this.getClass());
 
     private PageElement buttonMenuBar = new PageElement("Menu Bar Button", FindBy.className("bm-burger-button"));
+    private PageElement buttonShopingCart = new PageElement("Menu Bar Button", FindBy.cssSelector("#shopping_cart_container > a"));
+
+
 
     public boolean menuBarButtonExists() {
         return UIThreadManager.getBrowser().exists(buttonMenuBar);
+    }
+
+    public void clickShopingCart() {
+        UIThreadManager.getBrowser().clickHiddenElement(buttonShopingCart);
     }
 }
