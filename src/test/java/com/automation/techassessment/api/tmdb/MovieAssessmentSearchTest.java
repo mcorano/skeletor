@@ -1,116 +1,147 @@
 package com.automation.techassessment.api.tmdb;
 
-import com.automation.techassessment.api.endpoints.ApiEndpoints;
-import com.automation.techassessment.api.endpoints.movies.MoviesResponse;
+import com.automation.techassessment.api.endpoints.movies.*;
 import org.testng.Assert;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
-import org.testng.asserts.SoftAssert;
+import retrofit2.Response;
+
+import java.io.IOException;
+import java.util.List;
 
 import static com.automation.techassessment.api.errors.RestAssertions.assertCallSucceeds;
 
-public class MovieAssessmentSearchTest {
-    private ApiEndpoints rest;
-
-    @BeforeMethod
-    public void setup() throws Exception {
-        rest = ApiEndpoints.newBuilder().build();
-    }
-
-    @Test(dataProvider = "movieNames")
-        /*
-    The most important test in this series, we are expecting users to get a result in every movie search
-     */
-    public void searchMovieByOriginalTitle(String name) {
-
-        Assert.assertEquals(assertCallSucceeds(rest.movie.searchMovie(name)).code(), 200, "Movie search is not getting any result");
-    }
-
-    @Test(dataProvider = "movieIDs")
-    /*
-    As part of UX each result should be displayed along with its principal information, most valuable are
-    Title, Release date, Original language and Poster.
-     */
-    public void verifyDisplayedMovieInfo(String id) {
-
-        SoftAssert softAssert = new SoftAssert();
-        MoviesResponse moviesResponse = assertCallSucceeds(rest.movie.getMovieGeneralInfo(id)).body();
-        softAssert.assertTrue(!moviesResponse.getTitle().isEmpty(), "The title of the movie is not displayed");
-        softAssert.assertTrue(!moviesResponse.getReleaseDate().isEmpty(),"The release date of the movie is not displayed");
-        softAssert.assertTrue(!moviesResponse.getOriginalLanguage().isEmpty(), "The language of the movie is not displayed");
-        softAssert.assertTrue(!moviesResponse.getPosterPath().isEmpty(), "The Poster of the movie is not displayed");
-        softAssert.assertAll();
-    }
-
-    @Test
-    /*
-    As part of our homepage the latest added movie its suggested on a banner at the top of the page this test ensures
-    a movie is shown.
-     */
-    public void verifyLatestMovieAdded() {
-
-        SoftAssert softAssert = new SoftAssert();
-        MoviesResponse moviesResponse = assertCallSucceeds(rest.movie.getLatestMovie()).body();
-        softAssert.assertTrue(!moviesResponse.getTitle().isEmpty(), "The title of the latest movie is not displayed");
-
-    }
-
-    @DataProvider
-    public Object[][] movieIDs() {
-        return new Object[][]{
-                {"399174"}, {"141"}, {"198184"}
-        };
-    }
+public class MovieAssessmentSearchTest extends BaseAPITest{
 
     @DataProvider
     public Object[][] movieNames() {
         return new Object[][]{
-                {"Back to the future"}, {"Jojo"}, {"?!=44??"}
+                {"Back to the Future"}, {"Men in Black"}, {"Jojo Rabbit"}
         };
     }
 
+    @Test
+    /*
+    This test validate that our suggestions for similar movies have at least one matching keyword to let the user
+    discover more amazing films.
+     */
+    public void movies_similarMovies_VerifySimilarMoviesHaveMatchingKeywords() {
+
+        String searchQuery = "In Time";
+        //Searching for movie's id.
+        String movieID =getMovieID(searchQuery);
+        // Now we need to store the movie related keywords
+        List<String> movieKeywords = getMovieKeywords(movieID);
+        // Getting the similar movies keywords to be compared with the original
+        SimilarResponseMovies similarMovies = assertCallSucceeds(rest.movie.getSimilarMovies(movieID)).body();
+        List <MoviesSimilar> results = similarMovies.getResults();
+        //Time for compare each movie keyword with our original movie keywords
+        for (MoviesSimilar result: results) {
+            int similarities = 0;
+            for (String originalKeyword: movieKeywords) {
+                List<String> similarmoviesKeywords = getMovieKeywords(String.valueOf(result.getId()));
+                for (int i = 0; i < similarmoviesKeywords.size(); i++) {
+                    if ( originalKeyword.equals(similarmoviesKeywords.get(i))) {
+                        similarities++;
+                    }
+                }
+            }
+            Assert.assertTrue(similarities > 0,
+                    "One suggested similar movie doesn't have any matching keyword with the original");
+        }
+    }
+
+    @Test
+    /*
+    Validates that a user must be authenticated before rating a movie
+     */
+    public void movies_rateMovie_AuthenticationFailed() {
+        String searchQuery = "Donnie Darko";
+        //Searching for movie's id.
+        String movieID = getMovieID(searchQuery);
+        try {
+            //Validating the user does not have permission to access, expecting a 401 Unauthorized.
+            Response <RateResponseMovies> response = null;
+            response = rest.movie.postRate(movieID).execute();
+            Assert.assertEquals(response.code(), 401,
+                    "Authentication bypassed");
+        } catch (IOException e) {
+            StringBuilder errorMessage = new StringBuilder();
+            String responseBody = "Trying to get response body caused IOException: " + e.getMessage();
+            errorMessage.append(responseBody);
+        }
+    }
+
+    @Test(dataProvider = "movieNames")
+    /*
+    Emulates a user that wants to give his rating to a seen movie, the test validate
+    the success message at the post response.
+     */
+    public void movies_rateMovie_RatingMovieSuccessfully(String movieName) {
+        double ratingValue = 9.5;
+        //Creating a guest session
+        String guestSessionID = getGuestSessionID();
+        //Searching for movie's id.
+        String movieID = getMovieID(movieName);
+        //Creating request body for rating movies
+        MoviesRateBody moviesRateBody = new MoviesRateBody(ratingValue);
+        RateResponseMovies rate = assertCallSucceeds(rest.movie.postRate(movieID, guestSessionID, moviesRateBody)).body();
+        //Validate the movie rating was sent correctly
+        Assert.assertEquals(rate.getStatusMessage(), "Success.",
+                "Movie rating cannot be submitted");
+    }
+
+    @Test
+    /*
+    Emulates a user that wants to delete a given rating to an specific movie.
+     */
+    public void movies_rateMovie_DeleteRatingMovieSuccessfully() {
+        double ratingValue = 9.5;
+        String searchQuery = "Gremlins";
+        //Creating a guest session
+        String guestSessionID = getGuestSessionID();
+        //Searching for movie's id.
+        String movieID = getMovieID(searchQuery);
+        //Creating request body for rating movies
+        MoviesRateBody moviesRateBody = new MoviesRateBody(ratingValue);
+        assertCallSucceeds(rest.movie.postRate(movieID, guestSessionID, moviesRateBody));
+        DeleateRatingResponseMovies deleteRating = assertCallSucceeds(rest.movie.deleteLRatingtMovie(movieID, guestSessionID)).body();
+        //Validate the movie rating was deleted correctly
+        Assert.assertEquals(deleteRating.getStatusMessage(), "The item/record was deleted successfully.",
+                "Delete rating cannot be submitted");
+    }
 
     //TODO: Create more test scenarios for searching movies
 
     @Test(enabled = false)
-    public void searchMoviesByAlternativetitles() {
+    public void movies_movieCredits_VerifyActorIncludedInKnownForMoviesCast() {
         /*
-        Write code for validate that its possible to get the expected result from a movie searching
-        by its alternative titles, movie always should display its primary info (title, year, languages)
+        Code
+        Verify that all the movie results obtained by an actor search includes the actor in the cast
          */
     }
 
     @Test(enabled = false)
-    public void searchMoviesByGenre() {
+    public void movies_nowPlaying_MovieIsNotInTheatres() {
         /*
-        This test should validate that tis possible to get a movie results list by trying a search via movie genre
+        This test should validate that a movie is not listed on theatres
          */
     }
 
     @Test(enabled = false)
-    public void searchUnavailableMovie() {
+    public void movies_discover_FilteringIsWorking() {
         /*
-        If the user is looking for a movie that is not available for playing at the time we should at least
-         display 1 similar movie according to its genre tags.
-         */
-    }
-
-    //TODO: It would be amazing if we include some scripts in order to test our vulnerabilities **need to learn how**
-
-    @Test(enabled = false)
-    public void connectWithStolenAPIKey() {
-        /*
-        This test should verify that only the person who owns a credential can request info from the service
+        Verify that getting any certification requested from "/certification/movie/list"
+        works at dicover movies feature at least 1 result must be obtained
          */
     }
 
     @Test(enabled = false)
-    public void verifyCookiesAreProtected() {
+    public void search_duplicatedMovieNames_VerifyMovieSIDAreDifferent() {
         /*
-        This test should search for cookie security vulnerabilities to avoid someone trying to generate session tokens.
+        Isle of dogs has 2 search result with exact same name, its going to be necessary to validate
+        that at least two or more movies wth the same name has differente id's.
          */
     }
-
 
 }

@@ -65,7 +65,7 @@ public class TVResponse implements TMDbObject {
         this.first_air_date = first_air_date;
     }
 
-    public List<Genre> getGenres() {
+    public List<Genre>      getGenres() {
         return genres;
     }
 

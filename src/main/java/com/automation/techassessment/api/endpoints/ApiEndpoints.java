@@ -1,6 +1,7 @@
 package com.automation.techassessment.api.endpoints;
 
 import com.automation.techassessment.api.UsePort;
+import com.automation.techassessment.api.endpoints.authentication.AuthenticationEndpoint;
 import com.automation.techassessment.api.endpoints.movies.MoviesEndpoint;
 import com.automation.techassessment.api.endpoints.tv.TVEndpoint;
 import com.google.gson.Gson;
@@ -28,7 +29,7 @@ public class ApiEndpoints {
     private String baseUrl = null;
     public TVEndpoint tv = null;
     public MoviesEndpoint movie = null;
-
+    public AuthenticationEndpoint authentication = null;
 
     public static final class Builder {
         private String baseUrl = null;
@@ -109,6 +110,7 @@ public class ApiEndpoints {
     public void buildEndpointInstances() {
         tv = createService(TVEndpoint.class);
         movie = createService(MoviesEndpoint.class);
+        authentication = createService(AuthenticationEndpoint.class);
     }
 
     /**
